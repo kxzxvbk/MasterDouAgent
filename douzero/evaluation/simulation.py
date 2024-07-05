@@ -3,6 +3,7 @@ import pickle
 
 from douzero.env.game import GameEnv
 
+
 def load_card_play_models(card_play_model_path_dict):
     players = {}
 
@@ -13,27 +14,33 @@ def load_card_play_models(card_play_model_path_dict):
         elif card_play_model_path_dict[position] == 'random':
             from .random_agent import RandomAgent
             players[position] = RandomAgent()
+        elif card_play_model_path_dict[position] == 'llm':
+            from .llm_agent import LLMAgent
+            players[position] = LLMAgent(position,  "baselines/douzero_WP/landlord.ckpt", aux=True)
         else:
             from .deep_agent import DeepAgent
             players[position] = DeepAgent(position, card_play_model_path_dict[position])
     return players
 
-def mp_simulate(card_play_data_list, card_play_model_path_dict, q):
 
+def mp_simulate(card_play_data_list, card_play_model_path_dict, q):
     players = load_card_play_models(card_play_model_path_dict)
 
     env = GameEnv(players)
     for idx, card_play_data in enumerate(card_play_data_list):
+        print(f"Env: {idx}")
         env.card_play_init(card_play_data)
         while not env.game_over:
             env.step()
+        print(f"Env: {idx} over!\t{env.get_winner()}")
         env.reset()
 
     q.put((env.num_wins['landlord'],
            env.num_wins['farmer'],
            env.num_scores['landlord'],
-           env.num_scores['farmer']
-         ))
+           env.num_scores['farmer'],
+           ))
+
 
 def data_allocation_per_worker(card_play_data_list, num_workers):
     card_play_data_list_each_worker = [[] for k in range(num_workers)]
@@ -42,10 +49,12 @@ def data_allocation_per_worker(card_play_data_list, num_workers):
 
     return card_play_data_list_each_worker
 
-def evaluate(landlord, landlord_up, landlord_down, eval_data, num_workers):
 
+def evaluate(landlord, landlord_up, landlord_down, eval_data, num_workers):
     with open(eval_data, 'rb') as f:
         card_play_data_list = pickle.load(f)
+    #import ipdb;ipdb.set_trace()
+    card_play_data_list = card_play_data_list[:10]
 
     card_play_data_list_each_worker = data_allocation_per_worker(
         card_play_data_list, num_workers)
@@ -66,8 +75,8 @@ def evaluate(landlord, landlord_up, landlord_down, eval_data, num_workers):
     processes = []
     for card_paly_data in card_play_data_list_each_worker:
         p = ctx.Process(
-                target=mp_simulate,
-                args=(card_paly_data, card_play_model_path_dict, q))
+            target=mp_simulate,
+            args=(card_paly_data, card_play_model_path_dict, q))
         p.start()
         processes.append(p)
 
@@ -80,9 +89,13 @@ def evaluate(landlord, landlord_up, landlord_down, eval_data, num_workers):
         num_farmer_wins += result[1]
         num_landlord_scores += result[2]
         num_farmer_scores += result[3]
+        # with open(f'./demonstrations/game_{i}.pkl', 'wb') as f:
+        #     pickle.dump(result[4], f)
 
     num_total_wins = num_landlord_wins + num_farmer_wins
     print('WP results:')
     print('landlord : Farmers - {} : {}'.format(num_landlord_wins / num_total_wins, num_farmer_wins / num_total_wins))
     print('ADP results:')
-    print('landlord : Farmers - {} : {}'.format(num_landlord_scores / num_total_wins, 2 * num_farmer_scores / num_total_wins)) 
+    print('landlord : Farmers - {} : {}'.format(num_landlord_scores / num_total_wins,
+                                                2 * num_farmer_scores / num_total_wins))
+

@@ -19,7 +19,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_device
 
     evaluate(args.landlord,
              args.landlord_up,

@@ -1,3 +1,4 @@
+import copy
 from copy import deepcopy
 from . import move_detector as md, move_selector as ms
 from .move_generator import MovesGener
@@ -53,6 +54,8 @@ class GameEnv(object):
         self.bomb_num = 0
         self.last_pid = 'landlord'
 
+        self.history = []
+
     def card_play_init(self, card_play_data):
         self.info_sets['landlord'].player_hand_cards = \
             card_play_data['landlord']
@@ -101,8 +104,13 @@ class GameEnv(object):
         return self.bomb_num
 
     def step(self):
+        # append current info_set into self.history.
         action = self.players[self.acting_player_position].act(
             self.game_infoset)
+        tmp = copy.deepcopy(self.game_infoset)
+        tmp.real_act = action
+        self.history.append(tmp)
+
         assert action in self.game_infoset.legal_actions
 
         if len(action) > 0:
